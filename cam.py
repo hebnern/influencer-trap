@@ -23,7 +23,7 @@ def find_last_match(pattern, string):
     return None
 
 class PixelArray(object):
-    FLASH_BRIGHTNESS = 0.5
+    FLASH_BRIGHTNESS = 0.2
     IDLE_BRIGHTNESS = 0.05
 
     def __init__(self, pin, num_pixels, pixel_order):
@@ -115,7 +115,7 @@ class BigButton(object):
             time.sleep(0.02)
 
 class Camera(object):
-    SETTINGS_UPDATE_INTERVAL = 30
+    SETTINGS_UPDATE_INTERVAL = 10 * 60
     
     def __init__(self, resolution, pixel_array):
         self.resolution = resolution
@@ -184,7 +184,15 @@ class RaspiStillCamera(Camera):
                "--nopreview",
                "--settings"]
 
+
+        # raspistill hangs if the display is off, so force it on by changing virtual terminals
+        subprocess.call("chvt 6", shell=True)
+        subprocess.call("chvt 7", shell=True)
+
         result = subprocess.run(cmd, stderr=subprocess.PIPE)
+
+        # turn display back off
+        subprocess.call("tvservice -p", shell=True)
 
         m1 = find_last_match("mmal: Exposure now (?P<exposure>[0-9]*), analog gain (?P<analog_gain_n>[0-9]*)/(?P<analog_gain_d>[0-9]*), digital gain (?P<digital_gain_n>[0-9]*)/(?P<digital_gain_d>[0-9]*)", str(result.stderr))
         m2 = find_last_match("mmal: AWB R=(?P<awb_r_n>[0-9]*)/(?P<awb_r_d>[0-9]*), B=(?P<awb_b_n>[0-9]*)/(?P<awb_b_d>[0-9]*)", str(result.stderr))
@@ -238,7 +246,10 @@ if __name__ == '__main__':
             camera.take_photo(os.path.join(cur_dir, 'photos', 'photo-%f.jpg' % time.time()))
 
     finally:
-        camera.destroy()
-        idle_animation.stop()
-        pixel_array.destroy()
+        if camera:
+            camera.destroy()
+        if idle_animation:
+            idle_animation.stop()
+        if pixel_array:
+            pixel_array.destroy()
     
