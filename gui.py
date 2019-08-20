@@ -1,3 +1,4 @@
+import os
 import time
 import tkinter as tk
 import signal
@@ -6,7 +7,6 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import subprocess
 
-DIRECTORY_TO_WATCH = "/home/pi/influencer_trap/photos"
 PHOTO_DISPLAY_TIMEOUT = 5 * 60 * 1000
 
 class Handler(FileSystemEventHandler):
@@ -41,31 +41,33 @@ def display_off():
     global display_off_task
     display_off_task = None
 
-display_off_task = None
-display_off()
+if __name__ == '__main__':
+    cur_dir = os.path.dirname(os.path.realpath(__file__))
+
+    display_off_task = None
+    display_off()
     
-root=tk.Tk()
-root.wm_attributes('-fullscreen','true')
-root.config(cursor="none")
-root.after(500, check)
+    root=tk.Tk()
+    root.wm_attributes('-fullscreen','true')
+    root.config(cursor="none")
+    root.after(500, check)
 
-img = ImageTk.PhotoImage(Image.open("/home/pi/influencer_trap/insta_overlay.png"))
-insta_frame = tk.Label(root, image=img)
-insta_frame.place(x=0, y=0, width=1080, height=1920)
+    img = ImageTk.PhotoImage(Image.open(os.path.join(cur_dir, "insta_overlay.png")))
+    insta_frame = tk.Label(root, image=img)
+    insta_frame.place(x=0, y=0, width=1080, height=1920)
 
-insta_photo = tk.Label(root)
-insta_photo.place(x=59, y=166, width=951, height=1268)
+    insta_photo = tk.Label(root)
+    insta_photo.place(x=59, y=166, width=951, height=1268)
 
-event_handler = Handler()
+    event_handler = Handler()
 
-observer = Observer()
-observer.schedule(event_handler, DIRECTORY_TO_WATCH)
-observer.start()
+    observer = Observer()
+    observer.schedule(event_handler, os.path.join(cur_dir, 'photos'))
+    observer.start()
 
-try:
-    root.mainloop()
-finally:
-    observer.stop()
-    observer.join()
-
-    display_on()
+    try:
+        root.mainloop()
+    finally:
+        observer.stop()
+        observer.join()
+        display_on()

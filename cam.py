@@ -1,5 +1,5 @@
-import atexit
 import io
+import os
 import re
 import time
 import board
@@ -115,26 +115,37 @@ class BigButton(object):
             time.sleep(0.02)
 
 class Camera(object):
+    SETTINGS_UPDATE_INTERVAL = 30
+    
     def __init__(self, resolution, pixel_array):
         self.resolution = resolution
         self.pixel_array = pixel_array
+        self.settings_lock = threading.Lock()
         self.update_settings()
+
+    def destroy(self):
+        self.settings_update_timer.cancel()
 
     def update_settings(self):
         print("Updating settings...")
-        self.pixel_array.flash_on(countdown=False)
-        self.settings = self.update_capture_settings()
-        self.pixel_array.flash_off()
+        with self.settings_lock:
+            self.pixel_array.flash_on(countdown=False)
+            self.settings = self.update_capture_settings()
+            self.pixel_array.flash_off()
 
         print("  Analog gain:", self.settings['analog_gain'])
         print("  Digital gain:", self.settings['digital_gain'])
         print("  Shutter speed:", self.settings['shutter_speed'])
         print("  AWB gains:", self.settings['awb_gains'])
 
-    def take_photo(self):
-        self.pixel_array.flash_on()
-        self.capture_image("/home/pi/influencer_trap/photos/blah.jpg")
-        self.pixel_array.flash_off()
+        self.settings_update_timer = threading.Timer(Camera.SETTINGS_UPDATE_INTERVAL, self.update_settings)
+        self.settings_update_timer.start()
+
+    def take_photo(self, output_path):
+        with self.settings_lock:
+            self.pixel_array.flash_on()
+            self.capture_image(output_path)
+            self.pixel_array.flash_off()
 
     def update_capture_settings(self):
         raise Exception()
@@ -206,24 +217,28 @@ class RaspiStillCamera(Camera):
                          "--nopreview",
                          "--verbose"])
 
-try:
-    button = BigButton(pin=BUTTON_PIN)
-    pixel_array = PixelArray(pin=PIXEL_PIN, num_pixels=NUM_PIXELS, pixel_order=PIXEL_ORDER)
-    #camera = PyCamera((951, 1268), pixel_array)
-    camera = RaspiStillCamera((951, 1268), pixel_array)
+if __name__ == '__main__':
+    cur_dir = os.path.dirname(os.path.realpath(__file__))
+    
+    try:
+        button = BigButton(pin=BUTTON_PIN)
+        pixel_array = PixelArray(pin=PIXEL_PIN, num_pixels=NUM_PIXELS, pixel_order=PIXEL_ORDER)
+        #camera = PyCamera((951, 1268), pixel_array)
+        camera = RaspiStillCamera((951, 1268), pixel_array)
 
-    idle_animation = IdleAnimation(pixel_array)
-    idle_animation.start()
+        idle_animation = IdleAnimation(pixel_array)
+        idle_animation.start()
 
-    while True:
-        print("Waiting for button press")
-        button.wait_for_press()
-        #time.sleep(5)
+        while True:
+            print("Waiting for button press")
+            button.wait_for_press()
+            #time.sleep(5)
 
-        print("Taking a photo")
-        camera.take_photo()
+            print("Taking a photo")
+            camera.take_photo(os.path.join(cur_dir, 'photos', 'photo-%f.jpg' % time.time()))
 
-finally:
-    idle_animation.stop()
-    pixel_array.destroy()
+    finally:
+        camera.destroy()
+        idle_animation.stop()
+        pixel_array.destroy()
     
